@@ -9,6 +9,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src')
     }
   },
+  build: {
+    target: 'es2015',
+    minify: 'esbuild',
+    sourcemap: false,
+    cssCodeSplit: false,
+    chunkSizeWarningLimit: 3000,
+    rollupOptions: {
+      maxParallelFileOps: 2
+    }
+  },
   server: {
     port: 5173,
     host: '0.0.0.0',

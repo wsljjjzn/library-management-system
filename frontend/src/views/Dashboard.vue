@@ -71,10 +71,62 @@
       <el-col :xs="24" :lg="16">
         <div class="app-card chart-card">
           <div class="card-header">
-            <span class="card-title">近 7 天借还流通趋势</span>
-            <el-tag size="small" type="primary">实时流转</el-tag>
+            <div class="chart-header-left">
+              <span class="card-title">近 7 天借还流通趋势</span>
+              <div class="chart-legend">
+                <span class="legend-item"><i class="dot blue"></i> 借出数量</span>
+                <span class="legend-item"><i class="dot green"></i> 归还入库</span>
+              </div>
+            </div>
+            <el-tag size="small" type="primary">实时统计</el-tag>
           </div>
-          <div ref="trendChartRef" class="chart-container"></div>
+
+          <!-- 轻量高性能原生 SVG 响应式图表 (零外部依赖，极速打包) -->
+          <div class="svg-chart-wrapper">
+            <svg viewBox="0 0 600 240" class="svg-chart" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.25"/>
+                  <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.0"/>
+                </linearGradient>
+                <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#10b981" stop-opacity="0.25"/>
+                  <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+                </linearGradient>
+              </defs>
+
+              <!-- 网格水平基准线 -->
+              <line x1="30" y1="30" x2="580" y2="30" stroke="#f1f5f9" stroke-dasharray="4" />
+              <line x1="30" y1="90" x2="580" y2="90" stroke="#f1f5f9" stroke-dasharray="4" />
+              <line x1="30" y1="150" x2="580" y2="150" stroke="#f1f5f9" stroke-dasharray="4" />
+              <line x1="30" y1="210" x2="580" y2="210" stroke="#e2e8f0" />
+
+              <!-- 填充渐变面积 -->
+              <path :d="borrowAreaPath" fill="url(#blueGrad)" />
+              <path :d="returnAreaPath" fill="url(#greenGrad)" />
+
+              <!-- 折线 Path -->
+              <path :d="borrowLinePath" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              <path :d="returnLinePath" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+
+              <!-- 借出数据节点圆圈 -->
+              <g v-for="(p, i) in borrowPoints" :key="'bp-' + i">
+                <circle :cx="p.x" :cy="p.y" r="4" fill="#ffffff" stroke="#3b82f6" stroke-width="2" />
+                <text :x="p.x" :y="p.y - 8" text-anchor="middle" font-size="11" fill="#3b82f6" font-weight="600">{{ p.val }}</text>
+              </g>
+
+              <!-- 归还数据节点圆圈 -->
+              <g v-for="(p, i) in returnPoints" :key="'rp-' + i">
+                <circle :cx="p.x" :cy="p.y" r="4" fill="#ffffff" stroke="#10b981" stroke-width="2" />
+                <text :x="p.x" :y="p.y + 16" text-anchor="middle" font-size="11" fill="#10b981" font-weight="600">{{ p.val }}</text>
+              </g>
+            </svg>
+
+            <!-- X 轴日期刻度 -->
+            <div class="x-axis-labels">
+              <span v-for="(d, i) in (trends.dates || [])" :key="i" class="x-label">{{ d }}</span>
+            </div>
+          </div>
         </div>
       </el-col>
 
@@ -151,8 +203,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick, onBeforeUnmount } from 'vue'
-import * as echarts from 'echarts'
+import { ref, onMounted, computed } from 'vue'
 import { getStatsOverviewApi, getStatsTrendsApi } from '@/api'
 import { useUserStore } from '@/store/user'
 
@@ -162,66 +213,52 @@ const isLibrarianOrAdmin = computed(() => userStore.isLibrarianOrAdmin)
 
 const overview = ref({})
 const trends = ref({ dates: [], borrow_counts: [], return_counts: [], popular_books: [] })
-const trendChartRef = ref(null)
-let chartInstance = null
 
-const initChart = () => {
-  if (!trendChartRef.value) return
-  if (!chartInstance) {
-    chartInstance = echarts.init(trendChartRef.value)
-  }
+// 原生轻量 SVG 图表计算逻辑 (计算坐标点)
+const maxVal = computed(() => {
+  const bMax = Math.max(...(trends.value.borrow_counts || [0]), 0)
+  const rMax = Math.max(...(trends.value.return_counts || [0]), 0)
+  return Math.max(bMax, rMax, 5) // 最小基准值 5
+})
 
-  const option = {
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['借出数量', '归还入库'], top: '0%' },
-    grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: trends.value.dates || []
-    },
-    yAxis: {
-      type: 'value',
-      minInterval: 1
-    },
-    series: [
-      {
-        name: '借出数量',
-        type: 'line',
-        smooth: true,
-        data: trends.value.borrow_counts || [],
-        itemStyle: { color: '#3b82f6' },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
-            { offset: 1, color: 'rgba(59, 130, 246, 0.02)' }
-          ])
-        }
-      },
-      {
-        name: '归还入库',
-        type: 'line',
-        smooth: true,
-        data: trends.value.return_counts || [],
-        itemStyle: { color: '#10b981' },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
-            { offset: 1, color: 'rgba(16, 185, 129, 0.02)' }
-          ])
-        }
-      }
-    ]
-  }
-
-  chartInstance.setOption(option)
+const getPoints = (dataList) => {
+  if (!dataList || !dataList.length) return []
+  const count = dataList.length
+  const stepX = (580 - 50) / Math.max(1, count - 1)
+  const chartHeight = 170 // 30 ~ 200
+  return dataList.map((val, i) => {
+    const x = 50 + i * stepX
+    const y = 200 - (val / maxVal.value) * chartHeight
+    return { x, y, val }
+  })
 }
 
-const handleResize = () => {
-  if (chartInstance) {
-    chartInstance.resize()
-  }
+const borrowPoints = computed(() => getPoints(trends.value.borrow_counts))
+const returnPoints = computed(() => getPoints(trends.value.return_counts))
+
+const makePath = (points) => {
+  if (!points.length) return ''
+  return points.reduce((acc, p, i) => {
+    return i === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`
+  }, '')
 }
+
+const borrowLinePath = computed(() => makePath(borrowPoints.value))
+const returnLinePath = computed(() => makePath(returnPoints.value))
+
+const borrowAreaPath = computed(() => {
+  if (!borrowPoints.value.length) return ''
+  const first = borrowPoints.value[0]
+  const last = borrowPoints.value[borrowPoints.value.length - 1]
+  return `${borrowLinePath.value} L ${last.x} 210 L ${first.x} 210 Z`
+})
+
+const returnAreaPath = computed(() => {
+  if (!returnPoints.value.length) return ''
+  const first = returnPoints.value[0]
+  const last = returnPoints.value[returnPoints.value.length - 1]
+  return `${returnLinePath.value} L ${last.x} 210 L ${first.x} 210 Z`
+})
 
 onMounted(async () => {
   try {
@@ -231,18 +268,8 @@ onMounted(async () => {
     ])
     overview.value = overviewRes.data
     trends.value = trendsRes.data
-    await nextTick()
-    initChart()
-    window.addEventListener('resize', handleResize)
   } catch (err) {
     console.error('获取看板数据失败', err)
-  }
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  if (chartInstance) {
-    chartInstance.dispose()
   }
 })
 </script>
@@ -326,15 +353,61 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #f1f5f9;
 }
 
+.chart-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .card-title {
   font-size: 15px;
   font-weight: 600;
   color: #1e293b;
 }
 
-.chart-container {
-  height: 300px;
+.chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dot.blue { background-color: #3b82f6; }
+.dot.green { background-color: #10b981; }
+
+.svg-chart-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.svg-chart {
   width: 100%;
+  height: 240px;
+}
+
+.x-axis-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 40px;
+  margin-top: 6px;
+}
+
+.x-label {
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .rank-list {
