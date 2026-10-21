@@ -16,7 +16,7 @@ export default defineConfig({
     cssCodeSplit: false,
     chunkSizeWarningLimit: 3000,
     rollupOptions: {
-      maxParallelFileOps: 2
+      maxParallelFileOps: 1
     }
   },
   server: {

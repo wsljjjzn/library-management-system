@@ -1,5 +1,5 @@
-# 构建阶段：针对 1G 内存小规格服务器深度轻量化
-FROM node:20-alpine AS build-stage
+# 构建阶段：采用标准 Debian glibc 运行环境 (node:20-slim)，彻底杜绝 Alpine 线程死锁挂起
+FROM node:20-slim AS build-stage
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ RUN npm config set registry https://registry.npmmirror.com && npm install --no-a
 
 COPY . .
 
-# 专为 1G 内存环境限制 Node 进程上限为 512M，杜绝 OOM 卡死
+# 专为 1G 内存服务器优化 Node 内存分配
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
 RUN npm run build
