@@ -4,7 +4,7 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
-// 按需精准导入业务用到的 Element Plus 图标，大幅降低 Rollup 编译内存与时间
+// 按需精准导入业务用到的 Element Plus 图标
 import {
   Reading,
   Odometer,
@@ -73,4 +73,7 @@ app.use(createPinia())
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
 
-app.mount('#app')
+// 确保路由准备完毕后再挂载到 DOM，杜绝白屏
+router.isReady().then(() => {
+  app.mount('#app')
+})

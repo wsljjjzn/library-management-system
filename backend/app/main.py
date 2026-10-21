@@ -57,5 +57,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health", tags=["探针监控"])
+@app.get("/api/v1/health", tags=["探针监控"])
 def health_check():
     return {"status": "ok", "app": settings.PROJECT_NAME, "version": "1.0.0"}
