@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: library-backend
+    restart: always
+    environment:
+      - DATABASE_URL=sqlite:////app/data/library.db
+      - SECRET_KEY=libraryhub-production-jwt-secret-key-2026
+    volumes:
+      - library_data:/app/data
+    networks:
+      - library_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: library-frontend
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - library_net
+
+volumes:
+  library_data:
+    name: library_data
+
+networks:
+  library_net:
+    driver: bridge
